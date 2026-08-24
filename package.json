@@ -1,0 +1,18 @@
+{
+  "name": "shell-history-fmt",
+  "version": "0.1.0",
+  "description": "Strict-by-default normaliser for messy shell history files.",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "histfmt": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.9"
+  }
+}
