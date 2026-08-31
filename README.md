@@ -83,16 +83,30 @@ histfmt: rejecting input (use --lenient to recover anyway):
 Re-running with `--lenient` merges both formats into one output
 stream instead of refusing to touch it.
 
+## multi-line commands
+
+zsh and HISTTIMEFORMAT-bash both write a command that contained a
+real newline by escaping it in the history file: each line that's
+part of the command ends in a single backslash, and the command
+resumes on the next physical line. `histfmt` reverses this -- a line
+ending in an odd number of backslashes is treated as a continuation,
+the backslash is stripped, and the following line is joined onto the
+command with a real newline in its place. A trailing backslash with
+nothing after it (end of file) is reported as an issue rather than
+silently dropped.
+
 ## output formats
 
 - `jsonl` (default): one `{"timestamp": number | null, "command": string}` object per line
-- `tsv`: `timestamp\tcommand`, with an empty first column when there's no timestamp
+- `tsv`: `timestamp\tcommand`, with an empty first column when there's
+  no timestamp. Since a command can now contain a real newline,
+  backslashes and newlines inside the command are escaped as `\\` and
+  `\n` so each record still occupies exactly one line.
 
 ## status
 
-Early skeleton. Multi-line commands (continuations), deduplication,
-and timestamp-order checks aren't implemented yet -- see the issues
-for what's next.
+Early skeleton. Deduplication and timestamp-order checks aren't
+implemented yet -- see the issues for what's next.
 
 ## license
 

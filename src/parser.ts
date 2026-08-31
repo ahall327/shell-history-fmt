@@ -40,6 +40,36 @@ function stripControlChars(text: string): string {
   return text.replace(CONTROL_CHAR_RE, "");
 }
 
+function countTrailingBackslashes(text: string): number {
+  let count = 0;
+  for (let i = text.length - 1; i >= 0 && text[i] === '\\'; i--) count++;
+  return count;
+}
+
+interface ResolvedCommand {
+  command: string;
+  lastIndex: number;
+  dangling: boolean;
+}
+
+// zsh and HISTTIMEFORMAT-bash both write a multi-line command to the history
+// file by replacing each embedded newline with a backslash followed by a
+// real newline. An odd number of trailing backslashes means "this line
+// continues"; an even number (including zero) means the backslashes are
+// literal and the command ends here.
+function resolveCommand(lines: string[], startIndex: number, initial: string): ResolvedCommand {
+  let text = initial;
+  let i = startIndex;
+  while (countTrailingBackslashes(text) % 2 === 1) {
+    if (i + 1 >= lines.length) {
+      return { command: text, lastIndex: i, dangling: true };
+    }
+    text = text.slice(0, -1) + '\n' + lines[i + 1];
+    i++;
+  }
+  return { command: text, lastIndex: i, dangling: false };
+}
+
 /**
  * Parses a raw shell history file that may be in zsh extended-history
  * format, bash timestamp-comment format, plain newline-separated commands
@@ -67,12 +97,18 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
     if (zshMatch) {
       sawZsh = true;
       const timestamp = Number(zshMatch[1]);
-      let command = zshMatch[3];
+      const resolved = resolveCommand(lines, i, zshMatch[3]);
+      let command = resolved.command;
+      if (resolved.dangling) {
+        issues.push({ line: lineNo, message: 'command continuation backslash at end of file has no following line', raw });
+        if (options.lenient) command = command.slice(0, -1);
+      }
       if (CONTROL_CHAR_RE.test(command)) {
         issues.push({ line: lineNo, message: 'command contains control characters', raw });
         if (options.lenient) command = stripControlChars(command);
       }
       entries.push({ timestamp, command });
+      i = resolved.lastIndex;
       continue;
     }
 
@@ -85,24 +121,35 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
       }
       sawBashMarker = true;
       const timestamp = Number(markerMatch[1]);
-      let command = next;
+      const resolved = resolveCommand(lines, i + 1, next);
+      let command = resolved.command;
+      if (resolved.dangling) {
+        issues.push({ line: lineNo + 1, message: 'command continuation backslash at end of file has no following line', raw: next });
+        if (options.lenient) command = command.slice(0, -1);
+      }
       if (CONTROL_CHAR_RE.test(command)) {
         issues.push({ line: lineNo + 1, message: 'command contains control characters', raw: next });
         if (options.lenient) command = stripControlChars(command);
       }
       entries.push({ timestamp, command });
-      i++;
+      i = resolved.lastIndex;
       continue;
     }
 
     // A plain line: either an untimed command, or an actual shell comment
     // the user typed at the prompt (e.g. "# fixed in a later commit").
-    let command = raw;
+    const resolved = resolveCommand(lines, i, raw);
+    let command = resolved.command;
+    if (resolved.dangling) {
+      issues.push({ line: lineNo, message: 'command continuation backslash at end of file has no following line', raw });
+      if (options.lenient) command = command.slice(0, -1);
+    }
     if (CONTROL_CHAR_RE.test(command)) {
       issues.push({ line: lineNo, message: 'command contains control characters', raw });
       if (options.lenient) command = stripControlChars(command);
     }
     entries.push({ timestamp: null, command });
+    i = resolved.lastIndex;
   }
 
   if (sawZsh && sawBashMarker) {
