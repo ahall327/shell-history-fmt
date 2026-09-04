@@ -49,6 +49,9 @@ histfmt ~/.zsh_history --lenient
 
 # read from stdin, write tab-separated instead of JSON lines
 cat ~/.bash_history | histfmt --format tsv
+
+# drop repeated commands, keeping only the last time each one ran
+histfmt ~/.zsh_history --dedupe
 ```
 
 Given this input (zsh extended history):
@@ -83,6 +86,16 @@ histfmt: rejecting input (use --lenient to recover anyway):
 Re-running with `--lenient` merges both formats into one output
 stream instead of refusing to touch it.
 
+## deduplication
+
+Pass `--dedupe` to drop repeated commands from the output. Only the
+last occurrence of each distinct command is kept -- the same
+convention zsh's `HIST_IGNORE_ALL_DUPS` uses -- so the output still
+reflects when each command was most recently run, and the rest of the
+history isn't cluttered with earlier runs of the same thing.
+Deduplication happens after parsing, so it applies to whatever
+`--lenient` recovered as well as clean input.
+
 ## multi-line commands
 
 zsh and HISTTIMEFORMAT-bash both write a command that contained a
@@ -105,8 +118,8 @@ silently dropped.
 
 ## status
 
-Early skeleton. Deduplication and timestamp-order checks aren't
-implemented yet -- see the issues for what's next.
+Early skeleton. Timestamp-order checks aren't implemented yet -- see
+the issues for what's next.
 
 ## license
 

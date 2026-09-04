@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { parseHistory, StrictParseError } from './parser';
+import { parseHistory, dedupeEntries, StrictParseError } from './parser';
 import { formatEntries, OutputFormat } from './format';
 
-const USAGE = `usage: histfmt [file] [--lenient] [--format jsonl|tsv]
+const USAGE = `usage: histfmt [file] [--lenient] [--dedupe] [--format jsonl|tsv]
 
 Normalises a shell history file into one record per command.
 
@@ -11,6 +11,7 @@ Normalises a shell history file into one record per command.
   --lenient      recover from malformed or mixed-format input instead of
                  rejecting it; drops what can't be salvaged and reports a
                  summary on stderr
+  --dedupe       keep only the last occurrence of each distinct command
   --format FMT   output format: jsonl (default) or tsv
   -h, --help     show this message
 `;
@@ -18,12 +19,14 @@ Normalises a shell history file into one record per command.
 interface Cli {
   path: string | null;
   lenient: boolean;
+  dedupe: boolean;
   format: OutputFormat;
 }
 
 function parseArgs(argv: string[]): Cli {
   let path: string | null = null;
   let lenient = false;
+  let dedupe = false;
   let format: OutputFormat = 'jsonl';
 
   for (let i = 0; i < argv.length; i++) {
@@ -33,6 +36,8 @@ function parseArgs(argv: string[]): Cli {
       process.exit(0);
     } else if (arg === '--lenient') {
       lenient = true;
+    } else if (arg === '--dedupe') {
+      dedupe = true;
     } else if (arg === '--format') {
       const value = argv[++i];
       if (value !== 'jsonl' && value !== 'tsv') {
@@ -54,7 +59,7 @@ function parseArgs(argv: string[]): Cli {
     }
   }
 
-  return { path, lenient, format };
+  return { path, lenient, dedupe, format };
 }
 
 function readInput(path: string | null): string {
@@ -81,7 +86,8 @@ function main(): void {
         process.stderr.write(`  line ${issue.line}: ${issue.message}\n`);
       }
     }
-    process.stdout.write(formatEntries(entries, cli.format) + '\n');
+    const output = cli.dedupe ? dedupeEntries(entries) : entries;
+    process.stdout.write(formatEntries(output, cli.format) + '\n');
   } catch (err) {
     if (err instanceof StrictParseError) {
       process.stderr.write('histfmt: rejecting input (use --lenient to recover anyway):\n');

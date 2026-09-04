@@ -167,3 +167,13 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
 
   return { entries, issues };
 }
+
+// Keeps only the last occurrence of each distinct command, in the order
+// those occurrences originally appeared -- the same convention zsh's
+// HIST_IGNORE_ALL_DUPS uses, since the most recent run of a command is
+// almost always the one worth keeping a record of.
+export function dedupeEntries(entries: HistoryEntry[]): HistoryEntry[] {
+  const lastIndexForCommand = new Map<string, number>();
+  entries.forEach((entry, index) => lastIndexForCommand.set(entry.command, index));
+  return entries.filter((entry, index) => lastIndexForCommand.get(entry.command) === index);
+}
