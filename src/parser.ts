@@ -10,19 +10,30 @@ export interface ParseIssue {
   raw: string;
 }
 
+// Non-monotonic timestamps are common in merged or hand-edited history
+// files and don't indicate a parse failure, so they're reported separately
+// from ParseIssue and never trigger strict-mode rejection on their own.
+export interface ParseWarning {
+  line: number;
+  message: string;
+}
+
 export class StrictParseError extends Error {
   issues: ParseIssue[];
+  warnings: ParseWarning[];
 
-  constructor(issues: ParseIssue[]) {
+  constructor(issues: ParseIssue[], warnings: ParseWarning[]) {
     super(`refusing to continue: ${issues.length} problem(s) found in strict mode`);
     this.name = 'StrictParseError';
     this.issues = issues;
+    this.warnings = warnings;
   }
 }
 
 export interface ParseResult {
   entries: HistoryEntry[];
   issues: ParseIssue[];
+  warnings: ParseWarning[];
 }
 
 export interface ParseOptions {
@@ -85,8 +96,22 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
   const lines = input.split(/\r\n|\n/);
   const entries: HistoryEntry[] = [];
   const issues: ParseIssue[] = [];
+  const warnings: ParseWarning[] = [];
   let sawZsh = false;
   let sawBashMarker = false;
+  let lastTimestamp: number | null = null;
+  let lastTimestampLine = 0;
+
+  function checkMonotonic(timestamp: number, lineNo: number): void {
+    if (lastTimestamp !== null && timestamp < lastTimestamp) {
+      warnings.push({
+        line: lineNo,
+        message: `timestamp ${timestamp} is earlier than ${lastTimestamp} on line ${lastTimestampLine}`,
+      });
+    }
+    lastTimestamp = timestamp;
+    lastTimestampLine = lineNo;
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
@@ -97,6 +122,7 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
     if (zshMatch) {
       sawZsh = true;
       const timestamp = Number(zshMatch[1]);
+      checkMonotonic(timestamp, lineNo);
       const resolved = resolveCommand(lines, i, zshMatch[3]);
       let command = resolved.command;
       if (resolved.dangling) {
@@ -121,6 +147,7 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
       }
       sawBashMarker = true;
       const timestamp = Number(markerMatch[1]);
+      checkMonotonic(timestamp, lineNo);
       const resolved = resolveCommand(lines, i + 1, next);
       let command = resolved.command;
       if (resolved.dangling) {
@@ -162,10 +189,10 @@ export function parseHistory(input: string, options: ParseOptions): ParseResult 
   }
 
   if (issues.length > 0 && !options.lenient) {
-    throw new StrictParseError(issues);
+    throw new StrictParseError(issues, warnings);
   }
 
-  return { entries, issues };
+  return { entries, issues, warnings };
 }
 
 // Keeps only the last occurrence of each distinct command, in the order

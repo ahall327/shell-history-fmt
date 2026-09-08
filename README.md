@@ -108,6 +108,20 @@ command with a real newline in its place. A trailing backslash with
 nothing after it (end of file) is reported as an issue rather than
 silently dropped.
 
+## timestamp order
+
+Timestamps are expected to increase (or stay flat) as the file goes on,
+since that's the order the shell wrote them in. If a later entry has an
+earlier timestamp than the one before it, `histfmt` prints a warning to
+stderr naming both lines but still produces output -- an out-of-order
+timestamp usually means two history files got concatenated, not that
+the input is corrupt, so it isn't treated as a strict-mode rejection.
+
+```
+histfmt: 1 timestamp warning(s):
+  line 3: timestamp 1690000000 is earlier than 1690000200 on line 2
+```
+
 ## output formats
 
 - `jsonl` (default): one `{"timestamp": number | null, "command": string}` object per line
@@ -118,8 +132,8 @@ silently dropped.
 
 ## status
 
-Early skeleton. Timestamp-order checks aren't implemented yet -- see
-the issues for what's next.
+Early skeleton. No automated test suite yet -- see the issues for
+what's next.
 
 ## license
 

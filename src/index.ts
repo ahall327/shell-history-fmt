@@ -79,7 +79,13 @@ function main(): void {
   const input = readInput(cli.path);
 
   try {
-    const { entries, issues } = parseHistory(input, { lenient: cli.lenient });
+    const { entries, issues, warnings } = parseHistory(input, { lenient: cli.lenient });
+    if (warnings.length > 0) {
+      process.stderr.write(`histfmt: ${warnings.length} timestamp warning(s):\n`);
+      for (const warning of warnings) {
+        process.stderr.write(`  line ${warning.line}: ${warning.message}\n`);
+      }
+    }
     if (issues.length > 0) {
       process.stderr.write(`histfmt: recovered from ${issues.length} problem(s):\n`);
       for (const issue of issues) {
@@ -93,6 +99,12 @@ function main(): void {
       process.stderr.write('histfmt: rejecting input (use --lenient to recover anyway):\n');
       for (const issue of err.issues) {
         process.stderr.write(`  line ${issue.line}: ${issue.message}\n`);
+      }
+      if (err.warnings.length > 0) {
+        process.stderr.write(`histfmt: ${err.warnings.length} timestamp warning(s):\n`);
+        for (const warning of err.warnings) {
+          process.stderr.write(`  line ${warning.line}: ${warning.message}\n`);
+        }
       }
       process.exit(1);
     }
